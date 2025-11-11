@@ -13,11 +13,45 @@ using Chrysalis.Tx.Models;
 using Chrysalis.Tx.Models.Cbor;
 using Chrysalis.Tx.Utils;
 using Chrysalis.Wallet.Models.Enums;
+using WalletAddress = Chrysalis.Wallet.Models.Addresses.Address;
 
 namespace Chrysalis.Tx.Extensions;
 
 public static class TransactionBuilderExtensions
 {
+    private static bool IsVKeyPaymentAddress(TransactionOutput output)
+    {
+        WalletAddress addr = output switch
+        {
+            AlonzoTransactionOutput alonzo => WalletAddress.FromBytes(alonzo.Address.Value),
+            PostAlonzoTransactionOutput postAlonzo => WalletAddress.FromBytes(postAlonzo.Address.Value),
+            _ => throw new Exception("Invalid transaction output type")
+        };
+
+        return addr.Type is AddressType.Base
+            or AddressType.EnterprisePayment
+            or AddressType.PaymentWithPointerDelegation
+            or AddressType.PaymentWithScriptDelegation == false
+            && addr.Type is not AddressType.ScriptPaymentWithDelegation
+            && addr.Type is not AddressType.ScriptPaymentWithPointerDelegation
+            && addr.Type is not AddressType.ScriptPaymentWithScriptDelegation
+            && addr.Type is not AddressType.EnterpriseScriptPayment;
+    }
+
+    private static TransactionOutput BuildReturnOutput(Value value, TransactionBuilder builder, ResolvedInput firstCollateral)
+    {
+        if (builder.CollateralReturnAddress is not null)
+        {
+            return new PostAlonzoTransactionOutput(new Chrysalis.Cbor.Types.Cardano.Core.Common.Address(builder.CollateralReturnAddress.ToBytes()), value, null, null);
+        }
+
+        return firstCollateral.Output switch
+        {
+            AlonzoTransactionOutput alonzo => new AlonzoTransactionOutput(alonzo.Address, value, null),
+            PostAlonzoTransactionOutput postAlonzo => new AlonzoTransactionOutput(postAlonzo.Address!, value, null),
+            _ => throw new Exception("Invalid transaction output type")
+        };
+    }
     public static TransactionBuilder CalculateFee(this TransactionBuilder builder, List<Script> scripts, ulong defaultFee = 0, int mockWitnessFee = 1, List<ResolvedInput>? availableInputs = null)
     {
 
@@ -81,52 +115,72 @@ public static class TransactionBuilderExtensions
             {
                 ulong totalCollateral = FeeUtil.CalculateRequiredCollateral(fee, builder.pparams!.CollateralPercentage!.Value);
                 builder.SetTotalCollateral(totalCollateral);
+                
+                bool hasExplicitCollateral = builder.body.Collateral is not null && builder.body.Collateral.GetValue().Any();
+                if (!hasExplicitCollateral)
+                {
+                    builder.body = builder.body with { Collateral = null, CollateralReturn = null };
+                }
 
-                // Clear any existing collateral settings to start fresh
-                builder.body = builder.body with { Collateral = null, CollateralReturn = null };
+                TransactionOutput shapeOutput = availableInputs[0].Output;
+                byte[] dummyReturnOutputBytes = CborSerializer.Serialize(shapeOutput);
+                ulong estimatedMinLovelaceForReturn = FeeUtil.CalculateMinimumLovelace((ulong)builder.pparams!.AdaPerUTxOByte!, dummyReturnOutputBytes);
 
-                // Estimate minimum ADA needed for return output
-                ResolvedInput firstInput = availableInputs[0];
-                TransactionOutput dummyReturnOutput = firstInput.Output;
-
-                byte[] dummyReturnOutputBytes = CborSerializer.Serialize(dummyReturnOutput);
-                ulong estimatedMinLovelaceForReturn = FeeUtil.CalculateMinimumLovelace(
-                    (ulong)builder.pparams!.AdaPerUTxOByte!,
-                    dummyReturnOutputBytes
-                );
-
-                // Add buffer to ensure we have enough for return (50% buffer should be sufficient)
                 ulong totalCollateralNeeded = totalCollateral + estimatedMinLovelaceForReturn + (estimatedMinLovelaceForReturn / 2);
 
-                // Use coin selection to get sufficient collateral with buffer
-                List<Value> collateralRequirement = [new Lovelace(totalCollateralNeeded)];
                 int maxCollateralInputs = (int)(builder.pparams!.MaxCollateralInputs ?? 3);
-
-                CoinSelectionResult collateralSelection;
-                try
+                
+                // Build lookup for available inputs
+                var utxoLookup = new Dictionary<(byte[] TxId, ulong Index), ResolvedInput>(new TransactionTemplateBuilder<object>.TransactionInputEqualityComparer());
+                foreach (ResolvedInput u in availableInputs)
                 {
-                    collateralSelection = CoinSelectionUtil.LargestFirstAlgorithm(
-                        availableInputs,
-                        collateralRequirement,
-                        maxCollateralInputs
-                    );
-                }
-                catch (InvalidOperationException)
-                {
-                    // Fallback: try with just the required collateral amount
-                    collateralSelection = CoinSelectionUtil.LargestFirstAlgorithm(
-                        availableInputs,
-                        [new Lovelace(totalCollateral)],
-                        maxCollateralInputs
-                    );
+                    utxoLookup[(u.Outref.TransactionId, u.Outref.Index)] = u;
                 }
 
-                List<ResolvedInput> collateralInputs = collateralSelection.Inputs;
-
-                // Add all selected collateral inputs to the builder
-                foreach (ResolvedInput input in collateralInputs)
+                // spending inputs from body
+                List<ResolvedInput> spendingInputs = new();
+                foreach (TransactionInput input in builder.body.Inputs.GetValue())
                 {
-                    builder.AddCollateral(input.Outref);
+                    var key = (input.TransactionId, input.Index);
+                    if (utxoLookup.TryGetValue(key, out var res)) spendingInputs.Add(res);
+                }
+
+                List<ResolvedInput> eligibleSpending = spendingInputs.Where(x => IsVKeyPaymentAddress(x.Output)).ToList();
+                List<ResolvedInput> eligibleAll = availableInputs.Where(x => IsVKeyPaymentAddress(x.Output)).ToList();
+
+                List<ResolvedInput> collateralInputs;
+                if (hasExplicitCollateral)
+                {
+                    collateralInputs = new List<ResolvedInput>();
+                    foreach (var ci in builder.body.Collateral!.GetValue())
+                    {
+                        var key = (ci.TransactionId, ci.Index);
+                        if (utxoLookup.TryGetValue(key, out var res)) collateralInputs.Add(res);
+                    }
+                }
+                else
+                {
+                    List<Value> collateralRequirement = [new Lovelace(totalCollateralNeeded)];
+                    try
+                    {
+                        collateralInputs = CoinSelectionUtil.LargestFirstAlgorithm(eligibleSpending, collateralRequirement, maxCollateralInputs).Inputs;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        try
+                        {
+                            collateralInputs = CoinSelectionUtil.LargestFirstAlgorithm(eligibleAll, collateralRequirement, maxCollateralInputs).Inputs;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            collateralInputs = CoinSelectionUtil.LargestFirstAlgorithm(eligibleAll, [new Lovelace(totalCollateral)], maxCollateralInputs).Inputs;
+                        }
+                    }
+
+                    foreach (ResolvedInput input in collateralInputs)
+                    {
+                        builder.AddCollateral(input.Outref);
+                    }
                 }
 
                 // Calculate totals
@@ -140,6 +194,17 @@ public static class TransactionBuilderExtensions
                 }
 
                 ulong returnLovelace = totalCollateralInputLovelace - totalCollateral;
+
+                // Era-specific rule: In Alonzo, collateral must be ADA-only and there is no collateral return field.
+                bool isAlonzoBody = builder.body is AlonzoTransactionBody;
+                if (isAlonzoBody)
+                {
+                    // Validate ADA-only collateral
+                    if (collateralInputs.Any(ci => ci.Output.Amount() is LovelaceWithMultiAsset))
+                    {
+                        throw new InvalidOperationException("Alonzo era requires ADA-only collateral inputs; token-bearing collateral is not allowed without CIP-40.");
+                    }
+                }
 
                 // Aggregate all assets from collateral inputs
                 Dictionary<byte[], TokenBundleOutput> aggregatedAssets = new(ByteArrayEqualityComparer.Instance);
@@ -185,22 +250,9 @@ public static class TransactionBuilderExtensions
                     returnValue = new Lovelace(returnLovelace);
                 }
 
-                // Create return output using first collateral's address
+                // Create return output using preferred address or first collateral's address
                 ResolvedInput firstCollateral = collateralInputs[0];
-                TransactionOutput returnOutput = firstCollateral.Output switch
-                {
-                    AlonzoTransactionOutput alonzo => new AlonzoTransactionOutput(
-                        alonzo.Address,
-                        returnValue,
-                        null
-                    ),
-                    PostAlonzoTransactionOutput postAlonzo => new AlonzoTransactionOutput(
-                        postAlonzo.Address!,
-                        returnValue,
-                        null
-                    ),
-                    _ => throw new Exception("Invalid transaction output type")
-                };
+                TransactionOutput returnOutput = BuildReturnOutput(returnValue, builder, firstCollateral);
 
                 // Final verification of minimum ADA requirement
                 byte[] returnOutputBytes = CborSerializer.Serialize(returnOutput);
@@ -216,7 +268,14 @@ public static class TransactionBuilderExtensions
                     );
                 }
 
-                builder.SetCollateralReturn(returnOutput);
+                // If collateral has tokens or if caller set a preferred address, set CIP-40 fields (Babbage/Conway)
+                bool hasTokens = aggregatedAssets.Count > 0;
+                // Only set CIP-40 fields in Babbage/Conway; Alonzo must remain without them
+                bool isPostAlonzoBody = builder.body is BabbageTransactionBody || builder.body is ConwayTransactionBody;
+                if (isPostAlonzoBody && (hasTokens || builder.CollateralReturnAddress is not null))
+                {
+                    builder.SetCollateralReturn(returnOutput);
+                }
             }
 
             iterations++;

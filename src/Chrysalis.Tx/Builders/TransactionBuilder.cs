@@ -8,6 +8,7 @@ using Chrysalis.Cbor.Types;
 using Chrysalis.Tx.Utils;
 using Chrysalis.Cbor.Extensions;
 using Chrysalis.Network.Cbor.LocalStateQuery;
+using WalletAddress = Chrysalis.Wallet.Models.Addresses.Address;
 
 namespace Chrysalis.Tx.Builders;
 
@@ -18,6 +19,9 @@ public class TransactionBuilder
     public ProtocolParams? pparams;
     public TransactionOutput? changeOutput;
     private PostAlonzoAuxiliaryDataMap? auxiliaryData;
+    
+    // Optional preferred address for CIP-40 collateral return output
+    public WalletAddress? CollateralReturnAddress { get; private set; }
 
     public TransactionBuilder()
     {
@@ -128,6 +132,12 @@ public class TransactionBuilder
         return this;
     }
 
+    public TransactionBuilder SetCollateralInputs(List<TransactionInput> inputs)
+    {
+        body = body with { Collateral = new CborDefListWithTag<TransactionInput>(inputs) };
+        return this;
+    }
+
     public TransactionBuilder AddCollateral(TransactionInput collateral)
     {
         body = body with { Collateral = new CborDefListWithTag<TransactionInput>([.. body.Collateral is not null ? body.Collateral.GetValue() : [], collateral]) };
@@ -149,6 +159,12 @@ public class TransactionBuilder
     public TransactionBuilder SetTotalCollateral(ulong totalCollateral)
     {
         body = body with { TotalCollateral = totalCollateral };
+        return this;
+    }
+
+    public TransactionBuilder SetCollateralReturnAddress(WalletAddress address)
+    {
+        CollateralReturnAddress = address;
         return this;
     }
 

@@ -5,6 +5,10 @@ using Chrysalis.Cbor.Types.Cardano.Core;
 using Chrysalis.Cbor.Types.Cardano.Core.Common;
 using Chrysalis.Cbor.Types.Cardano.Core.Transaction;
 using Chrysalis.Cbor.Types.Cardano.Core.TransactionWitness;
+using Chrysalis.Tx.Builders;
+using Chrysalis.Tx.Extensions;
+using Chrysalis.Tx.Models.Cbor;
+using Chrysalis.Cbor.Types.Cardano.Core.Protocol;
 
 namespace Chrysalis.Test;
 
@@ -32,6 +36,41 @@ partial record PersonOptional(
 
 public class CborTests
 {
+        [Fact]
+        public void Babbage_CIP40_Collateral_AutoTag_From_Spending_Input()
+        {
+            // Prepare minimal protocol params
+            ProtocolParams p = new(
+                MinFeeA: new RationalNumber(44,1),
+                MinFeeB: new RationalNumber(155381,1),
+                MinFeeRefScriptCostPerByte: new RationalNumber(1,1),
+                ExecutionCosts: new ExecutionUnitPrices(new RationalNumber(577,10000), new RationalNumber(721,10000000)),
+                CostModelsForScriptLanguage: new(new Dictionary<int, CborMaybeIndefList<long>>{ {0, new CborDefList<long>(new List<long>{1}) } }),
+                AdaPerUTxOByte: 4310,
+                CollateralPercentage: 150,
+                MaxCollateralInputs: 3
+            );
+
+            // Build tx with one input and one output; mark as script tx by setting a dummy redeemer later
+            TransactionBuilder b = TransactionBuilder.Create(p);
+            TransactionInput inp = new(HexStringCache.FromHexString("00"), 0);
+            Address addr = new(new byte[29]);
+            Value val = new Lovelace(5_000_000);
+            TransactionOutput outp = new PostAlonzoTransactionOutput(addr, val, null, null);
+            b.AddInput(inp).AddOutput(outp, true);
+
+            // Simulate evaluation presence
+            PostAlonzoTransactionWitnessSet ws = b.witnessSet with { Redeemers = new RedeemerList(new List<RedeemerEntry> { new RedeemerEntry(0,0,new CborEncodedValue(new byte[]{1}), new ExUnits(1,1)) }) };
+            b.witnessSet = ws;
+
+            // One available UTxO resolves the input
+            ResolvedInput r = new(inp, outp);
+            b.CalculateFee(new List<Script>{ new Script(0, new byte[]{0x01}) }, 2_000_000, 1, new List<ResolvedInput>{r});
+
+            PostMaryTransaction tx = b.Build();
+            // Collateral must be set (key 13) and, since no tokens, CIP-40 fields optional
+            Assert.NotNull(tx.TransactionBody.Collateral());
+        }
     [Theory]
     [InlineData("9FD8799FD8799F9FC24C0AFD35CBEC1F0EB61C6A5B4DC24C0CEFB03531E283A5DF051C66C24C067D7F114BF03905256C13A9C24C0E4A467359993326D19A78FBC24B76D585C1A093723F32404EC24D598DE7F123CC80BA2DBE2FBD40FF4455534462C24C204FCE5E3E25026110000000D8799FD8799FD87A9F1B00000191DAACEA81FFD87A80FFD8799FD87A9F1B00000191DAB17E61FFD87980FFFFFF58404F33E732ADCB80A24B323BD160054CE8CF33641E2DF1AFBA2BFCE109CB8C143745880CA239B1DFB6A0C86241DC36A3E0199071F11A53267FB7836AB0DEDEB103FFFF")]
     public void TransactionInputTest(string cbor)

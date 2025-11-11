@@ -8,7 +8,7 @@
     <Version>0.7.21</Version>
   </PropertyGroup>
 
-  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+  <Target Name="PreBuild" BeforeTargets="PreBuildEvent" Condition="'$(OS)' != 'Windows_NT' and '$(SkipPlutusPrebuild)' != 'true'">
     <Exec Command="./build-rs.sh" />
   </Target>
 
