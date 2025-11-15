@@ -92,7 +92,7 @@ public class CborTests
 
             // One available UTxO resolves the input
             ResolvedInput r = new(inp, outp);
-            b.CalculateFee(new List<Script>{ new PlutusV1Script(new Value1(1), new byte[]{0x01}) }, 2_000_000, 1, new List<ResolvedInput>{r});
+            b.CalculateFee(new List<Chrysalis.Cbor.Types.Cardano.Core.Common.Script>{ new PlutusV1Script(new Value1(1), new byte[]{0x01}) }, 2_000_000, 1, new List<ResolvedInput>{r});
 
             PostMaryTransaction tx = b.Build();
             // Collateral must be set (key 13) and, since no tokens, CIP-40 fields optional

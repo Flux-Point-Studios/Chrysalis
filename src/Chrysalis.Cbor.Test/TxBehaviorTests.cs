@@ -76,7 +76,7 @@ public class TxBehaviorTests
         ResolvedInput r = new(inp, outp);
 
         // Pass a tiny default fee and verify the algorithm computes a larger, correct fee instead of keeping the default
-        b.CalculateFee(new List<Script>(), 1, 1, new List<ResolvedInput> { r });
+        b.CalculateFee(new List<Chrysalis.Cbor.Types.Cardano.Core.Common.Script>(), 1, 1, new List<ResolvedInput> { r });
         PostMaryTransaction tx = b.Build();
 
         Assert.NotEqual((ulong)1, tx.TransactionBody.Fee());
