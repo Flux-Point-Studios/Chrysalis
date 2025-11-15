@@ -1,14 +1,18 @@
+using Chrysalis.Cbor.Extensions;
+using Chrysalis.Cbor.Extensions.Cardano.Core.Transaction;
 using Chrysalis.Cbor.Serialization;
 using Chrysalis.Cbor.Serialization.Attributes;
 using Chrysalis.Cbor.Types;
 using Chrysalis.Cbor.Types.Cardano.Core;
 using Chrysalis.Cbor.Types.Cardano.Core.Common;
+using Chrysalis.Cbor.Types.Cardano.Core.Protocol;
 using Chrysalis.Cbor.Types.Cardano.Core.Transaction;
 using Chrysalis.Cbor.Types.Cardano.Core.TransactionWitness;
+using Chrysalis.Network.Cbor.LocalStateQuery;
 using Chrysalis.Tx.Builders;
 using Chrysalis.Tx.Extensions;
 using Chrysalis.Tx.Models.Cbor;
-using Chrysalis.Cbor.Types.Cardano.Core.Protocol;
+using Chrysalis.Tx.Utils;
 
 namespace Chrysalis.Test;
 
@@ -41,31 +45,54 @@ public class CborTests
         {
             // Prepare minimal protocol params
             ProtocolParams p = new(
-                MinFeeA: new RationalNumber(44,1),
-                MinFeeB: new RationalNumber(155381,1),
-                MinFeeRefScriptCostPerByte: new RationalNumber(1,1),
-                ExecutionCosts: new ExecutionUnitPrices(new RationalNumber(577,10000), new RationalNumber(721,10000000)),
+                MinFeeA: 44UL,
+                MinFeeB: 155381UL,
+                MaxBlockBodySize: null,
+                MaxTransactionSize: null,
+                MaxBlockHeaderSize: null,
+                KeyDeposit: null,
+                PoolDeposit: null,
+                MaximumEpoch: null,
+                DesiredNumberOfStakePools: null,
+                PoolPledgeInfluence: null,
+                ExpansionRate: null,
+                TreasuryGrowthRate: null,
+                ProtocolVersion: null,
+                MinPoolCost: null,
+                AdaPerUTxOByte: 4310UL,
                 CostModelsForScriptLanguage: new(new Dictionary<int, CborMaybeIndefList<long>>{ {0, new CborDefList<long>(new List<long>{1}) } }),
-                AdaPerUTxOByte: 4310,
-                CollateralPercentage: 150,
-                MaxCollateralInputs: 3
+                ExecutionCosts: new ExUnitPrices(new CborRationalNumber(577,10000), new CborRationalNumber(721,10000000)),
+                MaxTxExUnits: null,
+                MaxBlockExUnits: null,
+                MaxValueSize: null,
+                CollateralPercentage: 150UL,
+                MaxCollateralInputs: 3UL,
+                PoolVotingThresholds: null,
+                DRepVotingThresholds: null,
+                MinCommitteeSize: null,
+                CommitteeTermLimit: null,
+                GovernanceActionValidityPeriod: null,
+                GovernanceActionDeposit: null,
+                DRepDeposit: null,
+                DRepInactivityPeriod: null,
+                MinFeeRefScriptCostPerByte: new CborRationalNumber(1,1)
             );
 
             // Build tx with one input and one output; mark as script tx by setting a dummy redeemer later
             TransactionBuilder b = TransactionBuilder.Create(p);
             TransactionInput inp = new(HexStringCache.FromHexString("00"), 0);
-            Address addr = new(new byte[29]);
+            Chrysalis.Cbor.Types.Cardano.Core.Common.Address addr = new(new byte[29]);
             Value val = new Lovelace(5_000_000);
             TransactionOutput outp = new PostAlonzoTransactionOutput(addr, val, null, null);
             b.AddInput(inp).AddOutput(outp, true);
 
             // Simulate evaluation presence
-            PostAlonzoTransactionWitnessSet ws = b.witnessSet with { Redeemers = new RedeemerList(new List<RedeemerEntry> { new RedeemerEntry(0,0,new CborEncodedValue(new byte[]{1}), new ExUnits(1,1)) }) };
+            PostAlonzoTransactionWitnessSet ws = b.witnessSet with { Redeemers = new RedeemerList(new List<RedeemerEntry> { new RedeemerEntry(0,0,new PlutusInt64(1), new ExUnits(1,1)) }) };
             b.witnessSet = ws;
 
             // One available UTxO resolves the input
             ResolvedInput r = new(inp, outp);
-            b.CalculateFee(new List<Script>{ new Script(0, new byte[]{0x01}) }, 2_000_000, 1, new List<ResolvedInput>{r});
+            b.CalculateFee(new List<Script>{ new PlutusV1Script(new Value1(1), new byte[]{0x01}) }, 2_000_000, 1, new List<ResolvedInput>{r});
 
             PostMaryTransaction tx = b.Build();
             // Collateral must be set (key 13) and, since no tokens, CIP-40 fields optional

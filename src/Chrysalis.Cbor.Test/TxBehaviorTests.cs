@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Chrysalis.Cbor.Extensions;
+using Chrysalis.Cbor.Extensions.Cardano.Core.Transaction;
 using Chrysalis.Cbor.Serialization;
 using Chrysalis.Cbor.Types;
 using Chrysalis.Cbor.Types.Cardano.Core;
@@ -10,11 +12,14 @@ using Chrysalis.Cbor.Types.Cardano.Core.Protocol;
 using Chrysalis.Cbor.Types.Cardano.Core.Transaction;
 using Chrysalis.Network.Cbor.LocalStateQuery;
 using Chrysalis.Tx.Builders;
+using Chrysalis.Tx.Extensions;
 using Chrysalis.Tx.Models;
 using Chrysalis.Tx.Models.Cbor;
+using Chrysalis.Tx.Utils;
 using Chrysalis.Wallet.Models.Addresses;
 using Chrysalis.Wallet.Models.Enums;
 using Chrysalis.Wallet.Models.Keys;
+using WalletAddress = Chrysalis.Wallet.Models.Addresses.Address;
 using Xunit;
 
 namespace Chrysalis.Test;
@@ -23,14 +28,37 @@ public class TxBehaviorTests
 {
     private static ProtocolParams CreateTestParams() =>
         new(
-            MinFeeA: new RationalNumber(44, 1),
-            MinFeeB: new RationalNumber(155381, 1),
-            MinFeeRefScriptCostPerByte: new RationalNumber(1, 1),
-            ExecutionCosts: new ExecutionUnitPrices(new RationalNumber(577, 10000), new RationalNumber(721, 10000000)),
+            MinFeeA: 44UL,
+            MinFeeB: 155381UL,
+            MaxBlockBodySize: null,
+            MaxTransactionSize: null,
+            MaxBlockHeaderSize: null,
+            KeyDeposit: null,
+            PoolDeposit: null,
+            MaximumEpoch: null,
+            DesiredNumberOfStakePools: null,
+            PoolPledgeInfluence: null,
+            ExpansionRate: null,
+            TreasuryGrowthRate: null,
+            ProtocolVersion: null,
+            MinPoolCost: null,
+            AdaPerUTxOByte: 4310UL,
             CostModelsForScriptLanguage: new(new Dictionary<int, CborMaybeIndefList<long>> { { 0, new CborDefList<long>(new List<long> { 1 }) } }),
-            AdaPerUTxOByte: 4310,
-            CollateralPercentage: 150,
-            MaxCollateralInputs: 3
+            ExecutionCosts: new ExUnitPrices(new CborRationalNumber(577, 10000), new CborRationalNumber(721, 10000000)),
+            MaxTxExUnits: null,
+            MaxBlockExUnits: null,
+            MaxValueSize: null,
+            CollateralPercentage: 150UL,
+            MaxCollateralInputs: 3UL,
+            PoolVotingThresholds: null,
+            DRepVotingThresholds: null,
+            MinCommitteeSize: null,
+            CommitteeTermLimit: null,
+            GovernanceActionValidityPeriod: null,
+            GovernanceActionDeposit: null,
+            DRepDeposit: null,
+            DRepInactivityPeriod: null,
+            MinFeeRefScriptCostPerByte: new CborRationalNumber(1, 1)
         );
 
     [Fact]
@@ -40,7 +68,7 @@ public class TxBehaviorTests
 
         TransactionBuilder b = TransactionBuilder.Create(p);
         TransactionInput inp = new(HexStringCache.FromHexString("00"), 0);
-        Address addr = new(new byte[29]);
+        Chrysalis.Cbor.Types.Cardano.Core.Common.Address addr = new(new byte[29]);
         Value val = new Lovelace(2_000_000);
         TransactionOutput outp = new AlonzoTransactionOutput(addr, val, null);
         b.AddInput(inp).AddOutput(outp, true);
@@ -96,8 +124,8 @@ public class TxBehaviorTests
         // Construct simple test addresses
         byte[] pk = Enumerable.Repeat((byte)0x01, 32).ToArray();
         byte[] cc = Enumerable.Repeat((byte)0x02, 32).ToArray();
-        Address sender = Address.FromPublicKeys(NetworkType.Testnet, AddressType.EnterprisePayment, new PublicKey(pk, cc));
-        Address recipient = Address.FromPublicKeys(NetworkType.Testnet, AddressType.EnterprisePayment, new PublicKey(pk.Select(b => (byte)(b + 1)).ToArray(), cc));
+        WalletAddress sender = WalletAddress.FromPublicKeys(NetworkType.Testnet, AddressType.EnterprisePayment, new PublicKey(pk, cc));
+        WalletAddress recipient = WalletAddress.FromPublicKeys(NetworkType.Testnet, AddressType.EnterprisePayment, new PublicKey(pk.Select(b => (byte)(b + 1)).ToArray(), cc));
 
         string senderBech32 = sender.ToBech32();
         string recipientBech32 = recipient.ToBech32();
@@ -143,11 +171,10 @@ public class TxBehaviorTests
         // Additionally, ensure the lone output is to the recipient address
         string outAddr = outputs[0] switch
         {
-            AlonzoTransactionOutput ao => Address.FromBytes(ao.Address.Value).ToBech32(),
-            PostAlonzoTransactionOutput po => Address.FromBytes(po.Address!.Value).ToBech32(),
+            AlonzoTransactionOutput ao => WalletAddress.FromBytes(ao.Address.Value).ToBech32(),
+            PostAlonzoTransactionOutput po => WalletAddress.FromBytes(po.Address!.Value).ToBech32(),
             _ => throw new InvalidOperationException("Unexpected output type")
         };
         Assert.Equal(recipientBech32, outAddr);
     }
 }
-
