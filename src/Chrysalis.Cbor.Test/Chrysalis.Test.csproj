@@ -36,6 +36,7 @@
               OutputItemType="Analyzer" 
               ReferenceOutputAssembly="false" />
     <ProjectReference Include="../Chrysalis.Tx/Chrysalis.Tx.csproj" />
+    <ProjectReference Include="../Chrysalis.Network/Chrysalis.Network.csproj" />
   </ItemGroup>
 
 </Project>

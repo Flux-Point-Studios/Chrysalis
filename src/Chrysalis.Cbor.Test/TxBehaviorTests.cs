@@ -8,6 +8,7 @@ using Chrysalis.Cbor.Types.Cardano.Core;
 using Chrysalis.Cbor.Types.Cardano.Core.Common;
 using Chrysalis.Cbor.Types.Cardano.Core.Protocol;
 using Chrysalis.Cbor.Types.Cardano.Core.Transaction;
+using Chrysalis.Network.Cbor.LocalStateQuery;
 using Chrysalis.Tx.Builders;
 using Chrysalis.Tx.Models;
 using Chrysalis.Tx.Models.Cbor;
