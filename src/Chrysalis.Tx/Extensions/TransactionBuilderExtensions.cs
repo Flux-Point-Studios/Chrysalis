@@ -126,7 +126,11 @@ public static class TransactionBuilderExtensions
                 byte[] dummyReturnOutputBytes = CborSerializer.Serialize(shapeOutput);
                 ulong estimatedMinLovelaceForReturn = FeeUtil.CalculateMinimumLovelace((ulong)builder.pparams!.AdaPerUTxOByte!, dummyReturnOutputBytes);
 
-                ulong totalCollateralNeeded = totalCollateral + estimatedMinLovelaceForReturn + (estimatedMinLovelaceForReturn / 2);
+                ulong pad = builder.UseLegacyCollateralReturnPadding
+                    ? (estimatedMinLovelaceForReturn / 2)
+                    : builder.CollateralReturnPadLovelace;
+
+                ulong totalCollateralNeeded = totalCollateral + estimatedMinLovelaceForReturn + pad;
 
                 int maxCollateralInputs = (int)(builder.pparams!.MaxCollateralInputs ?? 3);
                 
@@ -284,11 +288,6 @@ public static class TransactionBuilderExtensions
         if (iterations >= maxIterations)
         {
             throw new InvalidOperationException("Fee calculation did not converge after maximum iterations.");
-        }
-
-        if (defaultFee > 0)
-        {
-            fee = defaultFee;
         }
 
         builder.SetFee(fee);

@@ -25,6 +25,10 @@ The format follows a simple Keep a Changelog style with ISO 8601 dates.
 
 ### Changed
 - Fee calculation integrates collateral selection so fee reflects increased body size when collateral is present.
+- Added builder knobs to control conservative buffers:
+  - `ChangeFeeBufferLovelace` (default 5,000,000), `UseLegacyCollateralReturnPadding` (default true), `CollateralReturnPadLovelace` (default 0).
+- Coin selection now reads `ChangeFeeBufferLovelace` and no longer adds this buffer into wallet change.
+- Fee calculation no longer overwrites the computed fee with `defaultFee` at the end; `defaultFee` is only used as an initial guess.
 
 ### Notes for integrators
 - For Plutus transactions, collateral will be added automatically when not explicitly set. Use SetCollateralInputs(...) to override, and SetCollateralReturnAddress(...) to direct the collateral return output (Babbage/Conway).

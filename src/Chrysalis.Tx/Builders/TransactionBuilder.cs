@@ -23,6 +23,11 @@ public class TransactionBuilder
     // Optional preferred address for CIP-40 collateral return output
     public WalletAddress? CollateralReturnAddress { get; private set; }
 
+    // Configurable knobs (defaults preserve previous behavior)
+    public ulong ChangeFeeBufferLovelace { get; set; } = 5_000_000UL;
+    public bool UseLegacyCollateralReturnPadding { get; set; } = true;
+    public ulong CollateralReturnPadLovelace { get; set; } = 0UL;
+
     public TransactionBuilder()
     {
         body = CborTypeDefaults.TransactionBody;
