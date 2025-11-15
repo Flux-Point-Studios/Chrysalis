@@ -82,7 +82,8 @@ public class CborTests
             TransactionBuilder b = TransactionBuilder.Create(p);
             TransactionInput inp = new(HexStringCache.FromHexString("00"), 0);
             Chrysalis.Cbor.Types.Cardano.Core.Common.Address addr = new(new byte[29]);
-            Value val = new Lovelace(5_000_000);
+            // Use a larger UTXO amount to cover output, fee, and collateral
+            Value val = new Lovelace(20_000_000);
             TransactionOutput outp = new PostAlonzoTransactionOutput(addr, val, null, null);
             b.AddInput(inp).AddOutput(outp, true);
 

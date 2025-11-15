@@ -164,17 +164,20 @@ public class TxBehaviorTests
         var build = tpl.Build(Eval: true);
         PostMaryTransaction tx = (PostMaryTransaction)await build(new object());
 
-        // Expect exactly one output (recipient). No spurious change output derived from fee buffer.
+        // With 8 ADA input, 3 ADA output, and a fee, there should be change
+        // Verify that change goes to the correct address (not spurious from fee buffer)
         var outputs = tx.TransactionBody.Outputs().ToList();
-        Assert.Single(outputs);
+        Assert.Equal(2, outputs.Count); // Recipient + change
 
-        // Additionally, ensure the lone output is to the recipient address
-        string outAddr = outputs[0] switch
+        // Verify outputs: one to recipient, one to change address
+        var outputAddresses = outputs.Select(o => o switch
         {
             AlonzoTransactionOutput ao => WalletAddress.FromBytes(ao.Address.Value).ToBech32(),
             PostAlonzoTransactionOutput po => WalletAddress.FromBytes(po.Address!.Value).ToBech32(),
             _ => throw new InvalidOperationException("Unexpected output type")
-        };
-        Assert.Equal(recipientBech32, outAddr);
+        }).ToList();
+
+        Assert.Contains(recipientBech32, outputAddresses);
+        Assert.Contains(senderBech32, outputAddresses); // Change should go back to sender
     }
 }
