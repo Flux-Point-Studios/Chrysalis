@@ -370,7 +370,7 @@ public class TransactionTemplateBuilder<T>
         return inputLookup;
     }
 
-    private class TransactionInputEqualityComparer : IEqualityComparer<(byte[] TransactionId, ulong Index)>
+    public class TransactionInputEqualityComparer : IEqualityComparer<(byte[] TransactionId, ulong Index)>
     {
         public bool Equals((byte[] TransactionId, ulong Index) x, (byte[] TransactionId, ulong Index) y)
         {
