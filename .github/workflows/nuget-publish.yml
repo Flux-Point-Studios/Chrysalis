@@ -1,0 +1,97 @@
+name: Publish NuGet Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.1.0)'
+        required: false
+        type: string
+  push:
+    tags:
+      - 'v*.*.*'
+      - 'tx-v*.*.*'
+      - 'cbor-v*.*.*'
+      - 'wallet-v*.*.*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      
+      - name: Determine version from tag
+        id: tag_version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          # Remove prefix if present (e.g., tx-v0.1.0 -> 0.1.0)
+          VERSION=${TAG#tx-v}
+          VERSION=${VERSION#cbor-v}
+          VERSION=${VERSION#wallet-v}
+          VERSION=${VERSION#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION from tag: $TAG"
+      
+      - name: Set version from input
+        id: input_version
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.version != ''
+        run: |
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+      
+      - name: Restore dependencies
+        run: dotnet restore
+      
+      - name: Build CodeGen (required for other packages)
+        run: dotnet build -c Release --no-restore
+        working-directory: ./src/Chrysalis.Cbor.CodeGen
+      
+      - name: Pack CodeGen
+        run: dotnet pack -c Release -o ./nupkgs --no-build
+        working-directory: ./src/Chrysalis.Cbor.CodeGen
+      
+      - name: Pack Chrysalis.Cbor
+        run: dotnet pack -c Release -o ./nupkgs --no-build
+        working-directory: ./src/Chrysalis.Cbor
+      
+      - name: Pack Chrysalis.Tx
+        run: dotnet pack -c Release -o ./nupkgs --no-build
+        working-directory: ./src/Chrysalis.Tx
+      
+      - name: Pack Chrysalis.Wallet
+        run: dotnet pack -c Release -o ./nupkgs --no-build
+        working-directory: ./src/Chrysalis.Wallet
+        continue-on-error: true
+      
+      - name: Pack Chrysalis
+        run: dotnet pack -c Release -o ./nupkgs --no-build
+        working-directory: ./src/Chrysalis
+        continue-on-error: true
+      
+      - name: List packages to publish
+        run: |
+          echo "Packages ready for publishing:"
+          ls -lh ./nupkgs/*.nupkg || echo "No packages found"
+      
+      - name: Publish to NuGet
+        run: |
+          for package in ./nupkgs/*.nupkg; do
+            if [ -f "$package" ]; then
+              echo "Publishing $package..."
+              dotnet nuget push "$package" \
+                --api-key "${{ secrets.NUGET_API_KEY }}" \
+                --source https://api.nuget.org/v3/index.json \
+                --skip-duplicate
+            fi
+          done
+        continue-on-error: false
+
