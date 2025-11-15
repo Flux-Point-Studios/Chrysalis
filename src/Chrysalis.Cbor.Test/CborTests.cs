@@ -13,6 +13,10 @@ using Chrysalis.Tx.Builders;
 using Chrysalis.Tx.Extensions;
 using Chrysalis.Tx.Models.Cbor;
 using Chrysalis.Tx.Utils;
+using Chrysalis.Wallet.Models.Addresses;
+using Chrysalis.Wallet.Models.Enums;
+using Chrysalis.Wallet.Models.Keys;
+using System.Linq;
 
 namespace Chrysalis.Test;
 
@@ -81,7 +85,11 @@ public class CborTests
             // Build tx with one input and one output; mark as script tx by setting a dummy redeemer later
             TransactionBuilder b = TransactionBuilder.Create(p);
             TransactionInput inp = new(HexStringCache.FromHexString("00"), 0);
-            Chrysalis.Cbor.Types.Cardano.Core.Common.Address addr = new(new byte[29]);
+            // Use a valid enterprise vkey address so collateral selection accepts this UTxO
+            byte[] pk = Enumerable.Repeat((byte)0x01, 32).ToArray();
+            byte[] cc = Enumerable.Repeat((byte)0x02, 32).ToArray();
+            WalletAddress sender = WalletAddress.FromPublicKeys(NetworkType.Testnet, AddressType.EnterprisePayment, new PublicKey(pk, cc));
+            Chrysalis.Cbor.Types.Cardano.Core.Common.Address addr = new(sender.ToBytes());
             // Use a larger UTXO amount to cover output, fee, and collateral
             Value val = new Lovelace(20_000_000);
             TransactionOutput outp = new PostAlonzoTransactionOutput(addr, val, null, null);
