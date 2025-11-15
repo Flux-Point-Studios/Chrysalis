@@ -43,7 +43,7 @@ public class TxBehaviorTests
             ProtocolVersion: null,
             MinPoolCost: null,
             AdaPerUTxOByte: 4310UL,
-            CostModelsForScriptLanguage: new(new Dictionary<int, CborMaybeIndefList<long>> { { 0, new CborDefList<long>(new List<long> { 1 }) } }),
+            CostModelsForScriptLanguage: new(new Dictionary<int, CborMaybeIndefList<long>> { { 0, new CborIndefList<long>(new List<long> { 1 }) } }),
             ExecutionCosts: new ExUnitPrices(new CborRationalNumber(577, 10000), new CborRationalNumber(721, 10000000)),
             MaxTxExUnits: null,
             MaxBlockExUnits: null,
@@ -147,11 +147,11 @@ public class TxBehaviorTests
         // Build a transaction: spend 3 ADA to recipient, sender is change address
         var tpl = TransactionTemplateBuilder<object>
             .Create(provider)
-            .AddStaticParty("from", senderBech32, isChange: true)
+            .AddStaticParty("change", senderBech32, isChange: true)
             .AddStaticParty("to", recipientBech32, isChange: false)
             .AddInput((opt, _) =>
             {
-                opt.From = "from";
+                opt.From = "change";
                 opt.UtxoRef = txIn;
                 opt.Id = "0";
             })

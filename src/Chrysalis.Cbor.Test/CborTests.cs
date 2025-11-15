@@ -60,7 +60,7 @@ public class CborTests
                 ProtocolVersion: null,
                 MinPoolCost: null,
                 AdaPerUTxOByte: 4310UL,
-                CostModelsForScriptLanguage: new(new Dictionary<int, CborMaybeIndefList<long>>{ {0, new CborDefList<long>(new List<long>{1}) } }),
+                CostModelsForScriptLanguage: new(new Dictionary<int, CborMaybeIndefList<long>>{ {0, new CborIndefList<long>(new List<long>{1}) } }),
                 ExecutionCosts: new ExUnitPrices(new CborRationalNumber(577,10000), new CborRationalNumber(721,10000000)),
                 MaxTxExUnits: null,
                 MaxBlockExUnits: null,
