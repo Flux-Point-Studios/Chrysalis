@@ -51,29 +51,28 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
       
-      - name: Build CodeGen (required for other packages)
+      - name: Build all projects in Release
         run: dotnet build -c Release --no-restore
-        working-directory: ./src/Chrysalis.Cbor.CodeGen
       
       - name: Pack CodeGen
-        run: dotnet pack -c Release -o ./nupkgs --no-build
+        run: dotnet pack -c Release -o ../../nupkgs --no-build
         working-directory: ./src/Chrysalis.Cbor.CodeGen
       
       - name: Pack Chrysalis.Cbor
-        run: dotnet pack -c Release -o ./nupkgs --no-build
+        run: dotnet pack -c Release -o ../../nupkgs --no-build
         working-directory: ./src/Chrysalis.Cbor
       
       - name: Pack Chrysalis.Tx
-        run: dotnet pack -c Release -o ./nupkgs --no-build
+        run: dotnet pack -c Release -o ../../nupkgs --no-build
         working-directory: ./src/Chrysalis.Tx
       
       - name: Pack Chrysalis.Wallet
-        run: dotnet pack -c Release -o ./nupkgs --no-build
+        run: dotnet pack -c Release -o ../../nupkgs --no-build
         working-directory: ./src/Chrysalis.Wallet
         continue-on-error: true
       
       - name: Pack Chrysalis
-        run: dotnet pack -c Release -o ./nupkgs --no-build
+        run: dotnet pack -c Release -o ../../nupkgs --no-build
         working-directory: ./src/Chrysalis
         continue-on-error: true
       
